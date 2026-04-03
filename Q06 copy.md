@@ -1,0 +1,100 @@
+# Q6 — Parsing metrics and regression-style comparison
+
+## Expanded overview
+
+Helios treats metrics as persistent time series derived from parsed output. Once stored, those series can be compared automatically between runs, enabling regression analysis without manual bookkeeping in experiment scripts.
+
+## Why this matters
+
+- Comparing experiments by hand is error-prone and does not scale.
+- A stored metric history enables latest/min/max summaries and simple trend checks.
+- The compare_runs tool turns raw parsed logs into a concrete decision aid.
+
+## Detailed answer
+
+### Short answer
+
+You **configure** names/patterns once; parsing **fills** the store. **`compare_runs`** then diffs **stored** metrics between runs—no per-step manual reporting in scripts.
+
+### Pipeline
+
+- **Declare** metrics (names + optional regex) → **parse** logs continuously → **store** time series.
+- **`compare_runs`** (`helios/src/tools/compare-runs.ts`): baseline vs experiment, **latest / min / max**, **deltas** on shared names.
+- **`analyzer.ts`**: trend-style stats on **stored** points.
+
+### “Without manual metric definitions” means
+
+- **Not** hand-calling a reporting API on every training step.
+- You still **name** what to parse in config—that is lightweight vs embedding calls everywhere.
+
+### Takeaway
+
+Regression detection is **tool-driven over parsed series**, not ad-hoc copy-paste of numbers from logs.
+
+### Source snippet(s)
+
+```ts
+// helios/src/tools/compare-runs.ts
+const comparisons = names.map((name) => {
+  const a = summaryA[name];
+  const b = summaryB[name];
+  const delta = a && b ? b.latest - a.latest : null;
+  const direction =
+    delta === null
+      ? "n/a"
+      : delta < -0.0001
+        ? "decreased"
+        : delta > 0.0001
+          ? "increased"
+          : "unchanged";
+
+  return {
+    metric: name,
+    baseline: a
+      ? { latest: a.latest, min: a.min, max: a.max, samples: a.count }
+      : null,
+    experiment: b
+      ? { latest: b.latest, min: b.min, max: b.max, samples: b.count }
+      : null,
+    delta,
+    direction,
+  };
+});
+
+return JSON.stringify({
+  task_a: taskA,
+  task_b: taskB,
+  comparisons,
+});
+```
+
+## Practical design implications
+
+- Users can evaluate whether a change improved or degraded results more quickly.
+- Comparisons are standardized across runs rather than ad hoc.
+- Metrics become reusable inputs for higher-level analysis tools.
+
+## Conclusion
+
+Overall, Q6 highlights a deliberate architectural choice in Helios: the system favors explicit, durable, and operationally reliable mechanisms over brittle or purely implicit behavior.
+
+## Architectural reasoning
+
+Once metrics are stored as structured time series, Helios can analyze runs as artifacts rather than raw terminal output. This unlocks direct comparison, regression detection, and trend inspection across experiments.
+
+## Example scenario
+
+Suppose one run ends with lower loss but greater instability, while another converges more smoothly. Because Helios stores the metric series, tools can summarize latest, min, max, and comparative deltas instead of relying on manual visual inspection alone.
+
+## Trade-offs and limitations
+
+- The system still requires metric naming or patterns in configuration.
+- Stored comparisons are only as good as the parsed metrics.
+- But the approach is far more reusable than manually reading logs for every experiment.
+
+## Source files referenced
+
+- `helios/src/tools/compare-runs.ts`
+- `helios/src/metrics/parser.ts`
+- `helios/src/metrics/analyzer.ts`
+

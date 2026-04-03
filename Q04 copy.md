@@ -1,0 +1,91 @@
+# Q4 — Explicit checkpoint boundaries vs arbitrary code points
+
+## Expanded overview
+
+Checkpointing must happen at a coherent orchestration boundary. If it happened in the middle of a tool call or partial reasoning step, the model history, tool state, and persisted memory could diverge. Helios avoids that by checkpointing at an explicit turn boundary.
+
+## Why this matters
+
+- Consistency matters more than maximum checkpoint frequency.
+- The provider session must not be reset in the middle of an unfinished action.
+- A stable boundary makes checkpoint behavior understandable and debuggable.
+
+## Detailed answer
+
+### Short answer
+
+Checkpoints run at a **well-defined point in the orchestrator** (after a full model turn), not at random places in “user code.”
+
+### Sequence (orchestrator)
+
+After `send` completes → **`maybeCheckpoint`** → roughly:
+
+1. **Gist** generation  
+2. **Persist** gist + active tasks into **memory**  
+3. **`resetHistory`** with a **briefing**  
+
+See `helios/src/core/orchestrator.ts`.
+
+### Why not “anywhere”?
+
+- Mid-turn / mid–**tool-call** checkpoint → **inconsistent** conversation + tool state.
+- A **single boundary** makes archive + memory write + history reset **coherent**.
+
+### Takeaway
+
+**Explicit** boundaries avoid corrupting the provider session; **implicit** arbitrary checkpoints would.
+
+### Source snippet(s)
+
+```ts
+// helios/src/core/orchestrator.ts
+private async *maybeCheckpoint(session: Session): AsyncGenerator<AgentEvent> {
+  if (!this._contextGate || !this.activeProvider) return;
+
+  const model = this.activeProvider.currentModel;
+  const threshold = this._contextGate.checkThreshold(model, this._lastInputTokens);
+  if (!threshold) return;
+
+  const gist = await this.generateCheckpointGist(session);
+  const briefing = this._contextGate.performCheckpointWithGist(gist);
+
+  this.activeProvider.resetHistory(session, briefing);
+  this._lastInputTokens = 0;
+
+  yield {
+    type: "text",
+    text: "\\n\\n---\\n*[Context checkpoint — conversation archived, continuing from memory]*\\n\\n",
+    delta: "\\n\\n---\\n*[Context checkpoint — conversation archived, continuing from memory]*\\n\\n",
+  };
+}
+```
+
+## Practical design implications
+
+- Lower risk of corrupting the conversational state.
+- Simpler reasoning about when a checkpoint may occur.
+- More predictable recovery semantics after history reset.
+
+## Conclusion
+
+Overall, Q4 highlights a deliberate architectural choice in Helios: the system favors explicit, durable, and operationally reliable mechanisms over brittle or purely implicit behavior.
+
+## Architectural reasoning
+
+A checkpoint boundary is a contract. Helios checkpoints after a coherent unit of work rather than at arbitrary execution points, which helps preserve correctness and keeps provider history resets understandable.
+
+## Example scenario
+
+If a checkpoint were inserted while a tool call was mid-flight, the resumed session might have incomplete reasoning, mismatched tool results, or ambiguous execution state. By waiting for the orchestrator boundary, Helios avoids that ambiguity.
+
+## Trade-offs and limitations
+
+- Less frequent checkpoint opportunities than a fully automatic dump-anywhere design.
+- Requires the orchestrator to explicitly manage when checkpointing is allowed.
+- In return, state transitions become much safer and easier to reason about.
+
+## Source files referenced
+
+- `helios/src/core/orchestrator.ts`
+- `helios/src/memory/context-gate.ts`
+

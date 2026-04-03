@@ -1,0 +1,106 @@
+# Q9 — Parsing output vs explicit metric reporting APIs
+
+## Expanded overview
+
+Explicit reporting APIs can be powerful, but they force every training stack to integrate with the agent runtime directly. Helios chooses parsing of ordinary output to reduce coupling and support a wider range of existing workflows.
+
+## Why this matters
+
+- Teams often already have logging conventions in place.
+- Supporting many frameworks is easier when Helios reads text output instead of requiring a dedicated instrumentation layer.
+- Configuration-based parsing reduces code churn in experiment scripts.
+
+## Detailed answer
+
+### Short answer
+
+Training stacks differ (PyTorch, Lightning, custom). **Parsing stdout** avoids a **Helios-specific reporting SDK** inside every script.
+
+### Benefits
+
+- Keep **normal** `print` / logger output.
+- Add or adjust **patterns** in config instead of editing training code.
+- **Lower coupling** between experiment code and the agent runtime.
+
+### References
+
+- `helios/src/metrics/parser.ts`  
+- `helios/README.md` — *Metric Tracking*
+
+### Takeaway
+
+**Convention + parsing** scales across projects better than mandatory explicit reporting hooks everywhere.
+
+### Source snippet(s)
+
+```md
+// helios/README.md (Metric Tracking)
+Training scripts print metrics to stdout. Helios parses them automatically:
+
+# key=value format (detected via metric_names)
+print(f"loss={loss:.4f} acc={acc:.4f} lr={lr:.6f}")
+
+# Custom patterns (detected via metric_patterns)
+print(f"Step {step}: Loss {loss:.4f}")
+```
+
+```ts
+// helios/src/metrics/parser.ts
+export function parseWithPatterns(
+  output: string,
+  mp: MetricPatterns,
+): MetricPoint[] {
+  const points: MetricPoint[] = [];
+  const now = Date.now();
+  const lines = output.split("\n");
+
+  for (const line of lines) {
+    for (const [name, re] of Object.entries(mp.patterns)) {
+      const match = re.exec(line);
+      if (match && match[1]) {
+        const value = parseFloat(match[1]);
+        if (isFinite(value)) {
+          points.push({
+            metricName: name,
+            value,
+            timestamp: now,
+          });
+        }
+      }
+    }
+  }
+
+  return points;
+}
+```
+
+## Practical design implications
+
+- Helios is easier to drop into heterogeneous research environments.
+- Users can retrofit observability onto older scripts with minimal changes.
+- Metric extraction remains flexible, though it depends on consistent output formatting.
+
+## Conclusion
+
+Overall, Q9 highlights a deliberate architectural choice in Helios: the system favors explicit, durable, and operationally reliable mechanisms over brittle or purely implicit behavior.
+
+## Architectural reasoning
+
+Parsing output keeps Helios decoupled from the training framework. Instead of enforcing a single reporting library, the agent can watch ordinary logs and extract useful values from them.
+
+## Example scenario
+
+A PyTorch script, a Lightning job, and a shell-wrapped benchmark may all emit different textual output, yet Helios can still observe them if the output includes parseable metrics or matching patterns.
+
+## Trade-offs and limitations
+
+- Text parsing can be brittle if logs change unexpectedly.
+- An explicit API could be more formal in some settings.
+- But parsing is significantly easier to adopt across mixed research codebases.
+
+## Source files referenced
+
+- `helios/src/metrics/parser.ts`
+- `helios/README.md`
+- `helios/src/tools/show-metrics.ts`
+

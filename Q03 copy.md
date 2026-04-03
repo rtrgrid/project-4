@@ -1,5 +1,16 @@
 # Q3 — Metric parsing and observability without invasive instrumentation
 
+## Expanded overview
+
+Observability is essential for autonomous experimentation, but forcing users to integrate a custom SDK into every training loop would raise friction and increase coupling. Helios instead extracts metrics from ordinary stdout or log output.
+
+## Why this matters
+
+- Users can keep their normal training scripts and logging style.
+- Metric capture becomes configuration-driven rather than code-invasive.
+- The same mechanism works across frameworks and custom scripts.
+
+## Detailed answer
 
 ### Short answer
 
@@ -63,3 +74,34 @@ export function parseWithPatterns(
   return points;
 }
 ```
+
+## Practical design implications
+
+- Lower adoption cost for new projects.
+- Metrics remain available for dashboards, comparisons, and trend analysis.
+- Changing tracked metrics often requires only config updates, not script rewrites.
+
+## Conclusion
+
+Overall, Q3 highlights a deliberate architectural choice in Helios: the system favors explicit, durable, and operationally reliable mechanisms over brittle or purely implicit behavior.
+
+## Architectural reasoning
+
+Helios favors observability by convention. If a training job already prints useful values, the platform can interpret those values without forcing the user to embed a custom agent API inside the training loop.
+
+## Example scenario
+
+If a script prints lines such as loss=0.82 acc=0.74 lr=1e-4, Helios can extract those numbers automatically and turn them into tracked metrics. The user does not need to rewrite the core training logic.
+
+## Trade-offs and limitations
+
+- Parsing logs depends on output consistency.
+- It may be less explicit than direct instrumentation APIs.
+- However, it dramatically lowers adoption friction and works across diverse training stacks.
+
+## Source files referenced
+
+- `helios/src/metrics/parser.ts`
+- `helios/src/metrics/collector.ts`
+- `helios/README.md`
+

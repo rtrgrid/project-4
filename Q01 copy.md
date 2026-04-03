@@ -1,5 +1,16 @@
-# Q1 — Filesystem checkpointing vs in-memory snapshots
+# Q1 — Why does Helios use filesystem checkpointing for agent state instead of in-memory snapshots?
 
+## Expanded overview
+
+Helios is designed for long-running autonomous work. In that setting, the failure mode to avoid is not just a crashed Python object but total loss of the agent's accumulated research state. Disk-backed checkpointing solves that by storing state in durable storage rather than relying on the current process memory.
+
+## Why this matters
+
+- A research run can span many model turns, machine operations, and checkpoint cycles.
+- If the process exits or the context window is reset, memory held only in RAM disappears instantly.
+- Persisting to SQLite and JSON gives Helios a stable source of truth that survives interruptions.
+
+## Detailed answer
 
 ### Short answer
 
@@ -82,3 +93,35 @@ save(sessions: SleepSession[]): void {
   renameSync(tmpPath, this.filePath);
 }
 ```
+
+## Practical design implications
+
+- Reliable resume after crashes or restarts.
+- Context checkpointing can safely archive chat history while preserving working state.
+- The agent can behave more like a persistent system than a one-shot chat session.
+
+## Conclusion
+
+Overall, Q1 highlights a deliberate architectural choice in Helios: the system favors explicit, durable, and operationally reliable mechanisms over brittle or purely implicit behavior.
+
+## Architectural reasoning
+
+Filesystem checkpointing gives Helios durability across failures. In-memory snapshots are fast but fundamentally tied to the lifetime of the current process. Helios is meant to operate over long horizons, so the system chooses persistence over ephemeral convenience.
+
+## Example scenario
+
+For example, if an autonomous training session runs overnight and the process is interrupted, a memory tree stored in SQLite can still be reloaded the next morning. A purely in-memory design would require reconstructing the state from scratch or from fragile chat history.
+
+## Trade-offs and limitations
+
+- Disk-backed persistence is slightly more complex than simple in-memory objects.
+- Consistency and atomic writes become important design concerns.
+- The payoff is much stronger recovery and continuity guarantees.
+
+## Source files referenced
+
+- `helios/src/memory/memory-store.ts`
+- `helios/src/scheduler/state-store.ts`
+- `helios/src/memory/context-gate.ts`
+- `helios/src/core/orchestrator.ts`
+

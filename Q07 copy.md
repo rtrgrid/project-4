@@ -1,5 +1,16 @@
 # Q7 — Composable triggers vs a pure event-driven design
 
+## Expanded overview
+
+A pure event-driven model is not sufficient for all wake conditions in ML workflows. Some conditions naturally arise from events, but others require polling, aggregation, or threshold evaluation. Helios therefore uses a composable trigger abstraction above the runtime mechanism.
+
+## Why this matters
+
+- Not every meaningful condition maps to a single operating-system event.
+- Logical composition such as OR and AND must work across heterogeneous trigger types.
+- The user-facing API should describe intent rather than implementation detail.
+
+## Detailed answer
 
 ### Short answer
 
@@ -95,3 +106,34 @@ private async evaluate(
   return satisfied;
 }
 ```
+
+## Practical design implications
+
+- Helios can mix event-driven and polling-based wake checks behind one interface.
+- The system can short-circuit composite expressions efficiently.
+- The abstraction remains flexible as new trigger types are added.
+
+## Conclusion
+
+Overall, Q7 highlights a deliberate architectural choice in Helios: the system favors explicit, durable, and operationally reliable mechanisms over brittle or purely implicit behavior.
+
+## Architectural reasoning
+
+Helios treats trigger composition as the user-facing abstraction and leaves implementation details to the runtime. Some triggers are naturally event-driven, others need polling, and the abstraction must cover both without exposing that complexity everywhere.
+
+## Example scenario
+
+A user message may wake the agent immediately as an event, while a metric threshold may require repeated checks over time. Helios hides that difference behind a common trigger expression model.
+
+## Trade-offs and limitations
+
+- The runtime is more complex because it must support heterogeneous evaluation strategies.
+- There may be tuning considerations for poll intervals and trigger latency.
+- Still, the design is more realistic for ML infrastructure than a purely event-only model.
+
+## Source files referenced
+
+- `helios/src/scheduler/triggers/types.ts`
+- `helios/src/scheduler/trigger-scheduler.ts`
+- `helios/src/scheduler/sleep-manager.ts`
+

@@ -1,0 +1,111 @@
+# Q5 — Separating state checkpointing from control flow
+
+## Expanded overview
+
+Helios separates durable research state from transient control flow. That architectural split lets the system replace the conversation buffer when needed without losing the important facts gathered during an experiment session.
+
+## Why this matters
+
+- The chat transcript is expensive in tokens but not always the best long-term representation of knowledge.
+- Persistent memory must outlive any single provider history window.
+- Autonomous execution should continue after checkpointing instead of rebooting the research process from scratch.
+
+## Detailed answer
+
+### Short answer
+
+**Durable state** (memory DB, summaries) and **the chat loop** (`send` / `resetHistory`) are different layers. You can reset **context** without throwing away **experiment knowledge**.
+
+### Two layers
+
+| Layer | What it is | Where |
+|-------|------------|--------|
+| **State** | Memory tree, active tasks, metric hooks | `MemoryStore` / SQLite, `context-gate.ts` |
+| **Control flow** | Autonomous loop, provider turns | `orchestrator.ts` |
+
+### Advantage
+
+- **Token budget** → replace long chat with a **briefing**; **memory** still holds `/experiments`, `/best`, etc.
+- The **agent keeps running**; only the **serialized conversation buffer** is replaced.
+
+### Takeaway
+
+Separating **what we persist** from **how we drive the model this step** avoids conflating “checkpoint chat” with “lose all research state.”
+
+### Source snippet(s)
+
+```ts
+// helios/src/memory/context-gate.ts
+performCheckpointWithGist(gist: string): string {
+  // Save the model's gist
+  this.memory.write(
+    "/context/gist",
+    "Model-generated summary of conversation before checkpoint",
+    gist,
+  );
+
+  // Save active tasks to /context/active-tasks
+  this.saveActiveTasks();
+
+  return this.buildBriefing(gist);
+}
+
+buildBriefing(gist: string | null): string {
+  const tree = this.memory.formatTree("/");
+
+  const parts = [
+    "=== CONTEXT CHECKPOINT ===",
+    "You are Helios, continuing an autonomous ML research session.",
+    "Your previous conversation has been archived.",
+  ];
+
+  if (gist) {
+    parts.push(
+      "\\n## Your gist (written by you before the checkpoint):\\n",
+      gist,
+    );
+  }
+
+  parts.push(
+    "\\n## Memory tree:\\n",
+    tree,
+    "\\nUse memory_read(path) for details on any item above.",
+    "Use memory_write to store new findings as you work.",
+    "Check /sources/ for prior work you've built on — cite these in any writeups.",
+    "Continue working toward your goal.",
+  );
+
+  return parts.join("\\n");
+}
+```
+
+## Practical design implications
+
+- Long sessions remain feasible under context limits.
+- Experiment knowledge can accumulate independently of chat history length.
+- Recovery relies on structured memory rather than replaying the entire prior conversation.
+
+## Conclusion
+
+Overall, Q5 highlights a deliberate architectural choice in Helios: the system favors explicit, durable, and operationally reliable mechanisms over brittle or purely implicit behavior.
+
+## Architectural reasoning
+
+Separating persistent state from control flow is one of the core architectural decisions in Helios. It means the conversation buffer is treated as transient execution context, while the memory tree is treated as the long-lived research record.
+
+## Example scenario
+
+Even if the current chat history is archived and replaced with a briefing, the agent can still recover goals, observations, best results, and other structured artifacts from memory. That lets work continue without replaying every prior message.
+
+## Trade-offs and limitations
+
+- The system must maintain clear boundaries between what belongs in memory and what stays in transient conversation state.
+- Developers must write meaningful notes to memory instead of assuming chat history is enough.
+- The reward is a much more scalable long-running agent architecture.
+
+## Source files referenced
+
+- `helios/src/memory/context-gate.ts`
+- `helios/src/core/orchestrator.ts`
+- `helios/src/init.ts`
+
