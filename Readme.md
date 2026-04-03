@@ -303,6 +303,33 @@ npm run dev          # tsx src/index.tsx
 npm run build        # tsc
 npm start            # node dist/index.js
 ```
+# Helios Answers to 10 Questions
+
+This folder contains expanded Markdown answers for the 10 architecture and design questions derived from the Helios notebook/report.
+
+## Contents
+
+- [Q1 — Filesystem checkpointing vs in-memory snapshots](./Q01.md)
+- [Q2 — Composable sleep triggers vs hard-coded timing](./Q02.md)
+- [Q3 — Metric parsing and observability without invasive instrumentation](./Q03.md)
+- [Q4 — Explicit checkpoint boundaries vs arbitrary code points](./Q04.md)
+- [Q5 — Separating state checkpointing from control flow](./Q05.md)
+- [Q6 — Parsing metrics and regression-style comparison](./Q06.md)
+- [Q7 — Composable triggers vs a pure event-driven design](./Q07.md)
+- [Q8 — Checkpoint recovery and migration across hosts](./Q08.md)
+- [Q9 — Parsing output vs explicit metric reporting APIs](./Q09.md)
+- [Q10 — Explicit, developer-aware boundaries vs fully automatic dumps](./Q10.md)
+
+## Notes
+
+- Each file now includes an expanded overview, the original source-backed answer, and practical implications.
+- The content is intended to be more explanatory and easier to use in a GitHub repository or documentation set.
+
+## Additional detail added
+
+- Each answer now also includes architectural reasoning.
+- Each file includes an example scenario and trade-off discussion.
+- Each file ends with a source-files-referenced section for easier navigation.
 
 ## License
 
